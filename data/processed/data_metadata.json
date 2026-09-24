@@ -1,0 +1,10 @@
+{
+    "total_rows": 1000,
+    "train_rows": 700,
+    "validation_rows": 150,
+    "test_rows": 150,
+    "number_of_features": 86,
+    "target_column": "DEFAULT",
+    "id_column": "CUST_ID",
+    "random_state": 42
+}

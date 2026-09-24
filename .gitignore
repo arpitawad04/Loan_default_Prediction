@@ -23,7 +23,7 @@ htmlcov/
 !.env.example
 
 # Generated data and model artifacts
-data/processed/
+# data/processed/
 models/
 mlruns/
 mlflow.db
@@ -32,7 +32,7 @@ mlflow.db-wal
 
 # Keep raw data out of GitHub by default.
 # Remove this rule if the dataset is safe to publish.
-data/raw/*
+# data/raw/*
 !data/raw/.gitkeep
 
 # Build and packaging output
