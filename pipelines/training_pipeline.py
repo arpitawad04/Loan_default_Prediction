@@ -3,10 +3,15 @@ import mlflow
 import mlflow.sklearn
 
 from src.features.feature_engineering import engineer_features
+from src.features.feature_selection import select_features
 from src.models.train import train_model
 from src.models.evaluate import evaluate_model
 from src.models.quality_gate import validate_model_quality
 
+
+# ---------------------------------------------------------
+# Configuration
+# ---------------------------------------------------------
 
 PROCESSED_DATA_PATH = "data/processed"
 
@@ -15,14 +20,14 @@ MLFLOW_EXPERIMENT_NAME = "loan_default_prediction"
 REGISTERED_MODEL_NAME = "LoanDefaultModel"
 
 
+# ---------------------------------------------------------
+# Load training and validation data
+# ---------------------------------------------------------
+
 def load_training_data():
     """
     Load training and validation datasets.
     """
-
-    # ---------------------------------------------------------
-    # Training data
-    # ---------------------------------------------------------
 
     X_train = pd.read_csv(
         f"{PROCESSED_DATA_PATH}/X_train.csv"
@@ -31,10 +36,6 @@ def load_training_data():
     y_train = pd.read_csv(
         f"{PROCESSED_DATA_PATH}/y_train.csv"
     ).squeeze()
-
-    # ---------------------------------------------------------
-    # Validation data
-    # ---------------------------------------------------------
 
     X_val = pd.read_csv(
         f"{PROCESSED_DATA_PATH}/X_val.csv"
@@ -52,37 +53,21 @@ def load_training_data():
     )
 
 
-def run_training_pipeline():
-    """
-    Execute the complete training pipeline.
+# ---------------------------------------------------------
+# Training Pipeline
+# ---------------------------------------------------------
 
-    Flow:
-        Load data
-        ↓
-        Feature engineering
-        ↓
-        Model training
-        ↓
-        Validation prediction
-        ↓
-        Model evaluation
-        ↓
-        MLflow tracking
-        ↓
-        Model quality gate
-        ↓
-        MLflow model registry
-    """
+def run_training_pipeline():
 
     print("=" * 60)
     print("STARTING TRAINING PIPELINE")
     print("=" * 60)
 
-    # =========================================================
-    # 1. Configure MLflow
-    # =========================================================
+    # -----------------------------------------------------
+    # Step 1: Configure MLflow
+    # -----------------------------------------------------
 
-    print("\n[1/8] Configuring MLflow...")
+    print("\n[1/9] Configuring MLflow...")
 
     mlflow.set_experiment(
         MLFLOW_EXPERIMENT_NAME
@@ -90,16 +75,14 @@ def run_training_pipeline():
 
     with mlflow.start_run():
 
-        print(
-            "MLflow run started."
-        )
+        print("MLflow run started.")
 
-        # =====================================================
-        # 2. Load data
-        # =====================================================
+        # -------------------------------------------------
+        # Step 2: Load data
+        # -------------------------------------------------
 
         print(
-            "\n[2/8] Loading training and validation data..."
+            "\n[2/9] Loading training and validation data..."
         )
 
         (
@@ -125,12 +108,12 @@ def run_training_pipeline():
             f"y_val shape:   {y_val.shape}"
         )
 
-        # =====================================================
-        # 3. Feature engineering
-        # =====================================================
+        # -------------------------------------------------
+        # Step 3: Feature Engineering
+        # -------------------------------------------------
 
         print(
-            "\n[3/8] Applying feature engineering..."
+            "\n[3/9] Applying feature engineering..."
         )
 
         X_train_engineered = engineer_features(
@@ -151,16 +134,50 @@ def run_training_pipeline():
             f"{X_val_engineered.shape}"
         )
 
-        # =====================================================
-        # 4. Train model
-        # =====================================================
+        # -------------------------------------------------
+        # Step 4: Feature Selection
+        # -------------------------------------------------
 
         print(
-            "\n[4/8] Training Logistic Regression model..."
+            "\n[4/9] Selecting model features..."
+        )
+
+        X_train_selected = select_features(
+            X_train_engineered
+        )
+
+        X_val_selected = select_features(
+            X_val_engineered
+        )
+
+        print(
+            f"X_train after feature selection: "
+            f"{X_train_selected.shape}"
+        )
+
+        print(
+            f"X_val after feature selection: "
+            f"{X_val_selected.shape}"
+        )
+
+        print(
+            "\nSelected features:"
+        )
+
+        print(
+            X_train_selected.columns.tolist()
+        )
+
+        # -------------------------------------------------
+        # Step 5: Train Model
+        # -------------------------------------------------
+
+        print(
+            "\n[5/9] Training Logistic Regression model..."
         )
 
         model_pipeline = train_model(
-            X_train=X_train_engineered,
+            X_train=X_train_selected,
             y_train=y_train
         )
 
@@ -168,35 +185,47 @@ def run_training_pipeline():
             "Model training completed."
         )
 
-        # =====================================================
-        # MLflow: Log parameters
-        # =====================================================
+        # -------------------------------------------------
+        # MLflow Parameters
+        # -------------------------------------------------
 
         mlflow.log_params({
+
             "model_type": "LogisticRegression",
+
             "training_rows": X_train.shape[0],
+
             "validation_rows": X_val.shape[0],
-            "training_features": X_train_engineered.shape[1],
-            "validation_features": X_val_engineered.shape[1]
+
+            "features_before_selection":
+                X_train_engineered.shape[1],
+
+            "features_after_selection":
+                X_train_selected.shape[1],
+
+            "selected_features":
+                ", ".join(
+                    X_train_selected.columns.tolist()
+                )
         })
 
-        # =====================================================
-        # 5. Generate validation predictions
-        # =====================================================
+        # -------------------------------------------------
+        # Step 6: Validation Predictions
+        # -------------------------------------------------
 
         print(
-            "\n[5/8] Generating validation predictions..."
+            "\n[6/9] Generating validation predictions..."
         )
 
         validation_probabilities = (
             model_pipeline.predict_proba(
-                X_val_engineered
+                X_val_selected
             )[:, 1]
         )
 
         validation_predictions = (
             model_pipeline.predict(
-                X_val_engineered
+                X_val_selected
             )
         )
 
@@ -210,12 +239,12 @@ def run_training_pipeline():
             validation_predictions.shape
         )
 
-        # =====================================================
-        # 6. Evaluate model
-        # =====================================================
+        # -------------------------------------------------
+        # Step 7: Model Evaluation
+        # -------------------------------------------------
 
         print(
-            "\n[6/8] Evaluating model..."
+            "\n[7/9] Evaluating model..."
         )
 
         (
@@ -223,8 +252,11 @@ def run_training_pipeline():
             confusion_matrix_result,
             classification_report_result
         ) = evaluate_model(
+
             y_true=y_val,
+
             y_probability=validation_probabilities,
+
             y_prediction=validation_predictions
         )
 
@@ -263,9 +295,9 @@ def run_training_pipeline():
             classification_report_result
         )
 
-        # =====================================================
-        # MLflow: Log metrics
-        # =====================================================
+        # -------------------------------------------------
+        # Log Metrics to MLflow
+        # -------------------------------------------------
 
         for metric_name, metric_value in metrics.items():
 
@@ -274,30 +306,26 @@ def run_training_pipeline():
                 metric_value
             )
 
-        # =====================================================
-        # 7. Model Quality Gate
-        # =====================================================
+        # -------------------------------------------------
+        # Step 8: Quality Gate
+        # -------------------------------------------------
 
         print(
-            "\n[7/8] Running model quality gate..."
+            "\n[8/9] Running model quality gate..."
         )
 
         model_passed = validate_model_quality(
             metrics
         )
 
-        # =====================================================
-        # Log quality gate result
-        # =====================================================
-
         mlflow.log_param(
             "quality_gate",
             "PASSED" if model_passed else "FAILED"
         )
 
-        # =====================================================
-        # Stop if model fails quality gate
-        # =====================================================
+        # -------------------------------------------------
+        # Stop if model fails
+        # -------------------------------------------------
 
         if not model_passed:
 
@@ -306,7 +334,8 @@ def run_training_pipeline():
             )
 
             print(
-                "Model did not meet the required quality thresholds."
+                "Model did not meet the required "
+                "quality thresholds."
             )
 
             return (
@@ -317,19 +346,24 @@ def run_training_pipeline():
                 y_val
             )
 
-        # =====================================================
-        # 8. Register model
-        # =====================================================
+        # -------------------------------------------------
+        # Step 9: Register Model
+        # -------------------------------------------------
 
         print(
-            "\n[8/8] Registering model in MLflow..."
+            "\n[9/9] Registering model in MLflow..."
         )
 
         model_info = mlflow.sklearn.log_model(
+
             sk_model=model_pipeline,
+
             name="loan_default_model",
-            skops_trusted_types=["numpy.dtype"],
-            registered_model_name=REGISTERED_MODEL_NAME
+
+            registered_model_name=
+                REGISTERED_MODEL_NAME,
+
+            skops_trusted_types=["numpy.dtype"]
         )
 
         print(
@@ -359,9 +393,9 @@ def run_training_pipeline():
         )
 
 
-# =============================================================
-# Run pipeline
-# =============================================================
+# ---------------------------------------------------------
+# Main
+# ---------------------------------------------------------
 
 if __name__ == "__main__":
 
