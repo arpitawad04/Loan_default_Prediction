@@ -4,8 +4,9 @@
 # Add only the variables that you want to use in the model.
 # Do NOT include the ID column.
 
-SELECTED_FEATURES = ['CREDIT_SCORE','R_UTILITIES_DEBT','R_DEBT_SAVINGS','R_GROCERIES_DEBT',
-                     'R_CLOTHING_DEBT','R_TAX_DEBT','R_EDUCATION_DEBT','CAT_DEPENDENTS']
+SELECTED_FEATURES = ['CREDIT_SCORE','R_DEBT_INCOME','R_TAX_DEBT','R_EXPENDITURE_DEBT','R_CLOTHING_DEBT','R_HEALTH',
+                     'R_GROCERIES','R_EDUCATION','R_DEBT_SAVINGS','R_HEALTH_DEBT'
+]
 
 
 def select_features(X):
