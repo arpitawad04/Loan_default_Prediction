@@ -1,7 +1,10 @@
 # src/inference/predictor.py
 
+from pathlib import Path
+
 import pandas as pd
 import mlflow.sklearn
+from mlflow import MlflowClient
 
 from src.features.feature_engineering import (
     engineer_features
@@ -21,12 +24,37 @@ def load_model():
     from MLflow Model Registry.
     """
 
-    model_uri = (
-        f"models:/{REGISTERED_MODEL_NAME}/latest"
+    client = MlflowClient()
+    registered_model = client.get_registered_model(
+        REGISTERED_MODEL_NAME
     )
 
+    if not registered_model.latest_versions:
+        raise FileNotFoundError(
+            f"No versions found for registered model "
+            f"'{REGISTERED_MODEL_NAME}'."
+        )
+
+    latest_version = max(
+        registered_model.latest_versions,
+        key=lambda version: int(version.version)
+    )
+    model_id = latest_version.source.rsplit("/", 1)[-1]
+    artifact_paths = list(
+        Path("mlruns").glob(
+            f"*/models/{model_id}/artifacts"
+        )
+    )
+
+    if not artifact_paths:
+        raise FileNotFoundError(
+            f"Artifacts for registered model version "
+            f"{latest_version.version} ({model_id}) were not found "
+            "under the local mlruns directory."
+        )
+
     model = mlflow.sklearn.load_model(
-        model_uri
+        str(artifact_paths[0])
     )
 
     print(
