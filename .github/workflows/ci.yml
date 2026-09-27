@@ -1,0 +1,169 @@
+name: Loan Default ML - CI
+
+
+# ==========================================================
+# WHEN SHOULD CI RUN?
+# ==========================================================
+
+on:
+
+  push:
+    branches:
+      - main
+
+  pull_request:
+    branches:
+      - main
+
+
+# ==========================================================
+# JOB
+# ==========================================================
+
+jobs:
+
+  ci:
+
+    name: Test and Build
+
+    runs-on: ubuntu-latest
+
+
+    steps:
+
+      # ----------------------------------------------------
+      # 1. Checkout source code
+      # ----------------------------------------------------
+
+      - name: Checkout repository
+
+        uses: actions/checkout@v6
+
+
+      # ----------------------------------------------------
+      # 2. Setup Python
+      # ----------------------------------------------------
+
+      - name: Setup Python 3.11
+
+        uses: actions/setup-python@v5
+
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+
+      # ----------------------------------------------------
+      # 3. Display environment
+      # ----------------------------------------------------
+
+      - name: Display Python version
+
+        run: |
+          python --version
+          pip --version
+
+
+      # ----------------------------------------------------
+      # 4. Install dependencies
+      # ----------------------------------------------------
+
+      - name: Install dependencies
+
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+
+      # ----------------------------------------------------
+      # 5. Run tests
+      # ----------------------------------------------------
+
+      - name: Run tests
+
+        run: |
+          pytest -v
+
+
+      # ----------------------------------------------------
+      # 6. Build Docker image
+      # ----------------------------------------------------
+
+      - name: Build Docker image
+
+        run: |
+          docker build \
+            -t loan-default-api:${{ github.sha }} \
+            .
+
+
+      # ----------------------------------------------------
+      # 7. Start Docker container
+      # ----------------------------------------------------
+
+      - name: Start Docker container
+
+        run: |
+          docker run \
+            -d \
+            --name loan-default-api \
+            -p 8000:8000 \
+            loan-default-api:${{ github.sha }}
+
+
+      # ----------------------------------------------------
+      # 8. Wait for application
+      # ----------------------------------------------------
+
+      - name: Wait for API
+
+        run: |
+          for i in {1..30}; do
+            if curl --fail http://localhost:8000/health; then
+              echo "API is healthy."
+              exit 0
+            fi
+
+            echo "Waiting for API..."
+            sleep 2
+          done
+
+          echo "API failed to start."
+          docker logs loan-default-api
+          exit 1
+
+
+      # ----------------------------------------------------
+      # 9. API smoke test
+      # ----------------------------------------------------
+
+      - name: API smoke test
+
+        run: |
+          curl --fail \
+            http://localhost:8000/health
+
+
+      # ----------------------------------------------------
+      # 10. Show container logs if needed
+      # ----------------------------------------------------
+
+      - name: Docker logs
+
+        if: always()
+
+        run: |
+          docker logs loan-default-api
+
+
+      # ----------------------------------------------------
+      # 11. Stop container
+      # ----------------------------------------------------
+
+      - name: Stop Docker container
+
+        if: always()
+
+        run: |
+          docker stop loan-default-api || true
+          docker rm loan-default-api || true
